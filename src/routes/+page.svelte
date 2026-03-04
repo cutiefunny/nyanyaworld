@@ -51,6 +51,26 @@
 	</section>
 
 	<section class="features">
+		<a href="/shop" class="feature-card shop-card">
+			<div class="card-bg">
+				<!-- 쇼핑 섹션용 배경 (이미지 부재 시 그라데이션) -->
+				<div class="gradient-bg shop-gradient"></div>
+			</div>
+			<div class="card-content">
+				<h2>잡화점 갤러리</h2>
+			</div>
+		</a>
+
+		<a href="/shop" class="feature-card shop-card">
+			<div class="card-bg">
+				<!-- 쇼핑 섹션용 배경 (이미지 부재 시 그라데이션) -->
+				<div class="gradient-bg shop-gradient"></div>
+			</div>
+			<div class="card-content">
+				<h2>근육고양이잡화점</h2>
+			</div>
+		</a>
+
 		<a href="/toons" class="feature-card">
 			{#if randomComicThumbnail}
 				<div class="card-bg">
@@ -72,16 +92,6 @@
 			</div>
 			<div class="card-content">
 				<h2>냐냐 게임즈</h2>
-			</div>
-		</a>
-
-		<a href="/shop" class="feature-card shop-card">
-			<div class="card-bg">
-				<!-- 쇼핑 섹션용 배경 (이미지 부재 시 그라데이션) -->
-				<div class="gradient-bg shop-gradient"></div>
-			</div>
-			<div class="card-content">
-				<h2>쇼핑하기</h2>
 			</div>
 		</a>
 	</section>

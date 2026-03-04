@@ -5,11 +5,19 @@
 	import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 
 	let { children } = $props();
+	let isAdmin = $derived(page.url.pathname.startsWith("/admin"));
 
 	$effect(() => {
 		const path = page.url.pathname;
-		// 관리자 페이지 접속은 카운트에서 제외하거나 별도 처리 가능
-		if (path.startsWith("/admin")) return;
+		const hostname = page.url.hostname;
+
+		// 관리자 페이지 또는 localhost 접속은 제외
+		if (
+			path.startsWith("/admin") ||
+			hostname === "localhost" ||
+			hostname === "127.0.0.1"
+		)
+			return;
 
 		const logVisit = async () => {
 			try {
@@ -55,29 +63,33 @@
 	</style>
 </svelte:head>
 
-<header>
-	<nav class="navbar">
-		<div class="container">
-			<h1 class="logo">냐냐월드</h1>
-			<ul class="nav-links">
-				<li><a href="/">Home</a></li>
-				<li><a href="/toons">Toons</a></li>
-				<li><a href="/games">Games</a></li>
-				<li><a href="/shop">Shop</a></li>
-			</ul>
-		</div>
-	</nav>
-</header>
+{#if !isAdmin}
+	<header>
+		<nav class="navbar">
+			<div class="container">
+				<h1 class="logo">냐냐월드</h1>
+				<ul class="nav-links">
+					<li><a href="/">Home</a></li>
+					<li><a href="/toons">Toons</a></li>
+					<li><a href="/games">Games</a></li>
+					<li><a href="/shop">Shop</a></li>
+				</ul>
+			</div>
+		</nav>
+	</header>
+{/if}
 
-<main>
+<main class={isAdmin ? "admin-layout" : ""}>
 	{@render children()}
 </main>
 
-<footer>
-	<div class="container">
-		<p>&copy; 2026 냐냐월드. All rights reserved.</p>
-	</div>
-</footer>
+{#if !isAdmin}
+	<footer>
+		<div class="container">
+			<p>&copy; 2026 냐냐월드. All rights reserved.</p>
+		</div>
+	</footer>
+{/if}
 
 <style>
 	header {
@@ -119,6 +131,11 @@
 	main {
 		min-height: calc(100vh - 200px);
 		padding: 1rem 0.5rem;
+	}
+
+	main.admin-layout {
+		min-height: 100vh;
+		padding: 0;
 	}
 
 	footer {

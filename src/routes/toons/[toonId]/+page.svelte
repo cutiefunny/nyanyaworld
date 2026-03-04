@@ -144,8 +144,8 @@
                         <img
                             src={episode.thumbnailUrl}
                             alt={`${episode.episodeTitle} 썸네일`}
-                            width="80"
-                            height="50"
+                            width="60"
+                            height="60"
                             class="episode-thumbnail"
                         />
                     {/if}
@@ -193,7 +193,7 @@
     .list {
         display: flex;
         flex-direction: column;
-        gap: 1rem;
+        gap: 0.2rem;
     }
 
     .list-item {
@@ -202,7 +202,7 @@
         align-items: center;
         padding: 1rem 1.5rem;
         background: #fff;
-        border: 1px solid #eaeaea;
+        border: 1px solid #c5c5c5;
         border-radius: 8px;
         text-decoration: none;
         color: #333;
@@ -239,8 +239,11 @@
     }
 
     .episode-thumbnail {
+        width: 60px;
+        height: 60px;
         border-radius: 4px;
         object-fit: cover;
+        aspect-ratio: 1 / 1;
     }
 
     .loading {

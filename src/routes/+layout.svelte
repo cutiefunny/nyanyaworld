@@ -1,7 +1,29 @@
 <script>
 	import favicon from "$lib/assets/favicon.svg";
+	import { page } from "$app/state";
+	import { db } from "$lib/firebase";
+	import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 
 	let { children } = $props();
+
+	$effect(() => {
+		const path = page.url.pathname;
+		// 관리자 페이지 접속은 카운트에서 제외하거나 별도 처리 가능
+		if (path.startsWith("/admin")) return;
+
+		const logVisit = async () => {
+			try {
+				await addDoc(collection(db, "Stats"), {
+					path,
+					userAgent: navigator.userAgent,
+					timestamp: serverTimestamp(),
+				});
+			} catch (e) {
+				console.error("Stats logging failed:", e);
+			}
+		};
+		logVisit();
+	});
 </script>
 
 <svelte:head>
@@ -59,7 +81,14 @@
 
 <style>
 	header {
+		display: none;
 		border-bottom: 1px solid #eeeeee;
+	}
+
+	@media (min-width: 1024px) {
+		header {
+			display: block;
+		}
 	}
 
 	.navbar {
@@ -89,7 +118,7 @@
 
 	main {
 		min-height: calc(100vh - 200px);
-		padding: 3rem 2rem;
+		padding: 1rem 0.5rem;
 	}
 
 	footer {

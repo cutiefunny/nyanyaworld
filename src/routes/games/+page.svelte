@@ -2,19 +2,18 @@
     import { db } from "$lib/firebase";
     import { collection, onSnapshot, query, orderBy } from "firebase/firestore";
 
-    let comics = $state([]);
+    let games = $state([]);
     let loading = $state(true);
 
     $effect(() => {
-        const comicsCollectionRef = collection(db, "Comics");
-        const q = query(comicsCollectionRef, orderBy("order", "asc"));
+        const gamesRef = collection(db, "Games");
+        const q = query(gamesRef, orderBy("createdAt", "desc"));
 
-        const unsubscribe = onSnapshot(q, (querySnapshot) => {
-            const comicsData = [];
-            querySnapshot.forEach((doc) => {
-                comicsData.push({ id: doc.id, ...doc.data() });
-            });
-            comics = comicsData;
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            games = snapshot.docs.map((doc) => ({
+                id: doc.id,
+                ...doc.data(),
+            }));
             loading = false;
         });
 
@@ -27,22 +26,22 @@
         <p class="loading">로딩 중...</p>
     {:else}
         <div class="grid">
-            {#each comics as comic (comic.id)}
-                {@const imageUrl =
-                    comic.thumbnailUrl &&
-                    (comic.thumbnailUrl.startsWith("http") ||
-                        comic.thumbnailUrl.startsWith("/"))
-                        ? comic.thumbnailUrl
-                        : "/images/icon-512.png"}
+            {#each games as game (game.id)}
+                {@const imageUrl = game.gameThumbnail || "/images/icon-512.png"}
 
-                <a href={`/toons/${comic.id}`} class="card">
+                <a
+                    href={game.gameUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="card"
+                >
                     <img
                         src={imageUrl}
-                        alt={comic.title}
+                        alt={game.gameTitle}
                         width="300"
                         height="300"
                     />
-                    <h2>{comic.title}</h2>
+                    <h2>{game.gameTitle}</h2>
                 </a>
             {/each}
         </div>
@@ -58,13 +57,6 @@
         max-width: 1000px;
         margin: 0 auto;
         padding: 1rem;
-    }
-
-    .title {
-        text-align: center;
-        font-size: 2.5rem;
-        margin-bottom: 2rem;
-        color: #000;
     }
 
     .loading {

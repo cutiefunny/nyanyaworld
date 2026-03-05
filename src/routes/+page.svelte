@@ -1,10 +1,59 @@
 <script>
-	import { db } from "$lib/firebase";
+	import { db, storage } from "$lib/firebase";
 	import { collection, onSnapshot, query, limit } from "firebase/firestore";
+	import {
+		ref,
+		listAll,
+		getDownloadURL,
+		getMetadata,
+	} from "firebase/storage";
 
 	let records = $state([]);
 	let randomComicThumbnail = $state(null);
 	let randomGameThumbnail = $state(null);
+	let randomGalleryThumbnail = $state(null);
+	let latestGalleryImages = $state([]);
+	let currentSlide = $state(0);
+	let startX = $state(0);
+	let isDragging = $state(false);
+
+	// 슬라이드 타이머
+	let slideInterval;
+	const startTimer = () => {
+		clearInterval(slideInterval);
+		slideInterval = setInterval(() => {
+			if (latestGalleryImages.length > 0 && !isDragging) {
+				currentSlide = (currentSlide + 1) % latestGalleryImages.length;
+			}
+		}, 5000);
+	};
+
+	// 스와이프 핸들러
+	const handleStart = (e) => {
+		isDragging = true;
+		startX = e.type.includes("touch") ? e.touches[0].clientX : e.clientX;
+	};
+
+	const handleEnd = (e) => {
+		if (!isDragging) return;
+		const endX = e.type.includes("touch")
+			? e.changedTouches[0].clientX
+			: e.clientX;
+		const diff = startX - endX;
+
+		if (Math.abs(diff) > 50) {
+			// 최소 스와이프 거리
+			if (diff > 0) {
+				currentSlide = (currentSlide + 1) % latestGalleryImages.length;
+			} else {
+				currentSlide =
+					(currentSlide - 1 + latestGalleryImages.length) %
+					latestGalleryImages.length;
+			}
+			startTimer(); // 조작 시 타이머 리셋
+		}
+		isDragging = false;
+	};
 
 	$effect(() => {
 		const q = query(collection(db, "records"), limit(10));
@@ -37,23 +86,215 @@
 			}
 		});
 
+		// --- IndexedDB Cache (Simplified for Home) ---
+		const DB_NAME = "GalleryCacheDB";
+		const STORE_NAME = "imageBlobs";
+		let dbInstance = null;
+
+		async function openDB() {
+			if (dbInstance) return dbInstance;
+			return new Promise((resolve, reject) => {
+				const request = indexedDB.open(DB_NAME, 1);
+				request.onerror = () => reject(request.error);
+				request.onsuccess = () => {
+					dbInstance = request.result;
+					resolve(dbInstance);
+				};
+			});
+		}
+
+		async function getCachedBlob(key) {
+			try {
+				const db = await openDB();
+				const tx = db.transaction(STORE_NAME, "readonly");
+				const store = tx.objectStore(STORE_NAME);
+				return new Promise((resolve) => {
+					const req = store.get(key);
+					req.onsuccess = () => resolve(req.result);
+					req.onerror = () => resolve(null);
+				});
+			} catch {
+				return null;
+			}
+		}
+
+		async function setCachedBlob(key, blob) {
+			try {
+				const db = await openDB();
+				const tx = db.transaction(STORE_NAME, "readwrite");
+				const store = tx.objectStore(STORE_NAME);
+				store.put(blob, key);
+			} catch (e) {
+				console.warn("Cache fail", e);
+			}
+		}
+
+		// 갤러리 썸네일 랜덤 추출 (최근 3개 중 1개)
+		const fetchGalleryThumbs = async () => {
+			try {
+				// 1. 메타데이터 캐시 확인
+				const cacheKey = "home_gallery_meta";
+				const cachedMetaStr = localStorage.getItem(cacheKey);
+				if (cachedMetaStr) {
+					const cached = JSON.parse(cachedMetaStr);
+					const randomPick =
+						cached[Math.floor(Math.random() * cached.length)];
+					// 블롭 캐시 확인
+					const blob = await getCachedBlob(randomPick.fullPath);
+					if (blob) {
+						randomGalleryThumbnail = URL.createObjectURL(blob);
+					} else {
+						randomGalleryThumbnail = randomPick.url;
+					}
+				}
+
+				const fetchAllFiles = async (dirRef) => {
+					const res = await listAll(dirRef);
+					const files = await Promise.all(
+						res.items.map(async (item) => {
+							const meta = await getMetadata(item);
+							if (meta.customMetadata?.hidden === "true")
+								return null;
+							return {
+								url: "", // URL은 필요할 때만 가져옴 (비용 절약)
+								fullPath: item.fullPath,
+								timeCreated: new Date(
+									meta.timeCreated,
+								).getTime(),
+							};
+						}),
+					);
+
+					const subFolderFiles = await Promise.all(
+						res.prefixes.map((folder) => fetchAllFiles(folder)),
+					);
+
+					return [...files.filter(Boolean), ...subFolderFiles.flat()];
+				};
+
+				const chatImagesRef = ref(storage, "chat_images");
+				const drawingsRef = ref(storage, "drawings");
+
+				const [chatFiles, drawingFiles] = await Promise.all([
+					fetchAllFiles(chatImagesRef),
+					fetchAllFiles(drawingsRef),
+				]);
+
+				const allFiles = [...chatFiles, ...drawingFiles];
+
+				if (allFiles.length > 0) {
+					// 전체 최신순 정렬 후 상위 6개 추출 (충분한 풀 확보)
+					const latestMeta = allFiles
+						.sort((a, b) => b.timeCreated - a.timeCreated)
+						.slice(0, 6);
+
+					// 메타데이터 캐시 업데이트
+					// 백그라운드에서 실제 URL 가져오기
+					const latestWithUrl = await Promise.all(
+						latestMeta.map(async (m) => {
+							const url = await getDownloadURL(
+								ref(storage, m.fullPath),
+							);
+							return { ...m, url };
+						}),
+					);
+
+					localStorage.setItem(
+						cacheKey,
+						JSON.stringify(latestWithUrl),
+					);
+
+					// 슬라이드용 이미지 준비
+					const blobPromises = latestWithUrl.map(async (img) => {
+						const blob = await getCachedBlob(img.fullPath);
+						if (blob) {
+							return URL.createObjectURL(blob);
+						} else {
+							// 캐시가 없으면 다운로드 후 저장
+							try {
+								const response = await fetch(img.url);
+								const newBlob = await response.blob();
+								await setCachedBlob(img.fullPath, newBlob);
+								return URL.createObjectURL(newBlob);
+							} catch {
+								return img.url;
+							}
+						}
+					});
+
+					latestGalleryImages = await Promise.all(blobPromises);
+
+					// 하단 섹션용 배경 (첫번째 이미지 활용)
+					if (latestGalleryImages.length > 0) {
+						randomGalleryThumbnail = latestGalleryImages[0];
+					}
+				}
+			} catch (e) {
+				console.warn("Home gallery thumb failed:", e);
+			}
+		};
+
+		fetchGalleryThumbs().then(startTimer);
+
 		return () => {
 			unsubscribeRecords();
 			unsubscribeComics();
 			unsubscribeGames();
+			clearInterval(slideInterval);
 		};
 	});
 </script>
 
 <div class="container">
 	<section class="hero">
-		<h1>(최신 소식 슬라이드)</h1>
+		{#if latestGalleryImages.length > 0}
+			<div
+				class="carousel-container"
+				onmousedown={handleStart}
+				onmouseup={handleEnd}
+				ontouchstart={handleStart}
+				ontouchend={handleEnd}
+				role="region"
+				aria-label="최신 소식 슬라이더"
+			>
+				<div class="carousel-track">
+					{#each latestGalleryImages as img, i}
+						{@const diff =
+							(i - currentSlide + latestGalleryImages.length) %
+							latestGalleryImages.length}
+						{@const position =
+							diff === 0
+								? "center"
+								: diff === 1
+									? "right"
+									: "left"}
+						<div class="carousel-slide {position}">
+							<img src={img} alt="최신 소식" />
+						</div>
+					{/each}
+				</div>
+				<div class="carousel-dots">
+					{#each latestGalleryImages as _, i}
+						<div
+							class="dot"
+							class:active={currentSlide === i}
+						></div>
+					{/each}
+				</div>
+			</div>
+		{:else}
+			<h1>(최신 소식 슬라이드)</h1>
+		{/if}
 	</section>
 
 	<section class="features">
 		<a href="/gallery" class="feature-card">
 			<div class="card-bg">
-				<div class="gradient-bg gallery-gradient"></div>
+				{#if randomGalleryThumbnail}
+					<img src={randomGalleryThumbnail} alt="갤러리 썸네일" />
+				{:else}
+					<div class="gradient-bg gallery-gradient"></div>
+				{/if}
 			</div>
 			<div class="card-content">
 				<h2>잡화점 갤러리</h2>
@@ -104,14 +345,93 @@
 
 	.hero {
 		text-align: center;
-		padding: 3rem 0;
+		padding: 4rem 0;
+		overflow: hidden;
 	}
 
-	.hero h1 {
-		font-size: 3rem;
-		color: #000000;
-		margin-bottom: 1rem;
-		font-weight: 700;
+	.carousel-container {
+		position: relative;
+		width: 100%;
+		height: 480px;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		cursor: grab;
+		user-select: none;
+	}
+
+	.carousel-container:active {
+		cursor: grabbing;
+	}
+
+	.carousel-track {
+		position: relative;
+		width: 100%;
+		height: 400px;
+		perspective: 1000px;
+	}
+
+	.carousel-slide {
+		position: absolute;
+		top: 50%;
+		left: 50%;
+		width: 60%;
+		height: 100%;
+		transform: translate(-50%, -50%);
+		transition: all 0.8s cubic-bezier(0.25, 1, 0.5, 1);
+		border-radius: 20px;
+		overflow: hidden;
+		box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+		opacity: 0;
+		z-index: 1;
+	}
+
+	.carousel-slide img {
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+	}
+
+	.carousel-slide.center {
+		opacity: 1;
+		z-index: 10;
+		transform: translate(-50%, -50%) scale(1.1);
+		box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+	}
+
+	.carousel-slide.left {
+		opacity: 0.6;
+		z-index: 5;
+		transform: translate(-95%, -50%) scale(0.85);
+		filter: blur(2px);
+	}
+
+	.carousel-slide.right {
+		opacity: 0.6;
+		z-index: 5;
+		transform: translate(-5%, -50%) scale(0.85);
+		filter: blur(2px);
+	}
+
+	.carousel-dots {
+		display: flex;
+		gap: 0.8rem;
+		margin-top: 2rem;
+	}
+
+	.dot {
+		width: 8px;
+		height: 8px;
+		border-radius: 50%;
+		background: #ddd;
+		transition: all 0.3s ease;
+	}
+
+	.dot.active {
+		background: #4facfe;
+		width: 24px;
+		border-radius: 4px;
 	}
 
 	.features {
@@ -212,8 +532,20 @@
 	}
 
 	@media (max-width: 768px) {
-		.hero h1 {
-			font-size: 2rem;
+		.carousel-container {
+			height: 320px;
+		}
+		.carousel-track {
+			height: 260px;
+		}
+		.carousel-slide {
+			width: 85%;
+		}
+		.carousel-slide.left {
+			transform: translate(-105%, -50%) scale(0.8);
+		}
+		.carousel-slide.right {
+			transform: translate(5%, -50%) scale(0.8);
 		}
 	}
 </style>

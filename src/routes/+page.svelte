@@ -306,7 +306,7 @@
 				<div class="gradient-bg shop-gradient"></div>
 			</div>
 			<div class="card-content">
-				<h2>근육고양이잡화점</h2>
+				<h2>냐냐 쇼핑몰</h2>
 			</div>
 		</a>
 

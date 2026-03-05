@@ -1,6 +1,7 @@
 <script>
 	import favicon from "$lib/assets/favicon.svg";
 	import { page } from "$app/state";
+	import { goto } from "$app/navigation";
 	import { db } from "$lib/firebase";
 	import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 
@@ -11,26 +12,55 @@
 		const path = page.url.pathname;
 		const hostname = page.url.hostname;
 
-		// 관리자 페이지 또는 localhost 접속은 제외
+		// 1. 통계 로깅 로직
 		if (
-			path.startsWith("/admin") ||
-			hostname === "localhost" ||
-			hostname === "127.0.0.1"
-		)
-			return;
+			!path.startsWith("/admin") &&
+			hostname !== "localhost" &&
+			hostname !== "127.0.0.1"
+		) {
+			const logVisit = async () => {
+				try {
+					await addDoc(collection(db, "Stats"), {
+						path,
+						userAgent: navigator.userAgent,
+						timestamp: serverTimestamp(),
+					});
+				} catch (e) {
+					console.error("Stats logging failed:", e);
+				}
+			};
+			logVisit();
+		}
 
-		const logVisit = async () => {
-			try {
-				await addDoc(collection(db, "Stats"), {
-					path,
-					userAgent: navigator.userAgent,
-					timestamp: serverTimestamp(),
-				});
-			} catch (e) {
-				console.error("Stats logging failed:", e);
-			}
-		};
-		logVisit();
+		// 2. 1분 미입력 시 메인 이동 로직
+		if (path !== "/" && !path.startsWith("/admin")) {
+			let timeout;
+
+			const resetTimer = () => {
+				clearTimeout(timeout);
+				timeout = setTimeout(() => {
+					goto("/");
+				}, 60000); // 1분
+			};
+
+			const events = [
+				"mousemove",
+				"mousedown",
+				"keydown",
+				"scroll",
+				"touchstart",
+			];
+			events.forEach((evt) => window.addEventListener(evt, resetTimer));
+
+			resetTimer(); // 초기 실행
+
+			return () => {
+				clearTimeout(timeout);
+				events.forEach((evt) =>
+					window.removeEventListener(evt, resetTimer),
+				);
+			};
+		}
 	});
 </script>
 

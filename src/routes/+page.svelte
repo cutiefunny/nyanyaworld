@@ -436,9 +436,21 @@
 
 	.features {
 		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+		grid-template-columns: 1fr;
 		gap: 2rem;
 		padding: 3rem 0;
+	}
+
+	@media (min-width: 550px) {
+		.features {
+			grid-template-columns: repeat(2, 1fr);
+		}
+	}
+
+	@media (min-width: 1024px) {
+		.features {
+			grid-template-columns: repeat(4, 1fr);
+		}
 	}
 
 	.feature-card {

@@ -51,19 +51,17 @@
 	</section>
 
 	<section class="features">
-		<a href="/shop" class="feature-card shop-card">
+		<a href="/gallery" class="feature-card">
 			<div class="card-bg">
-				<!-- 쇼핑 섹션용 배경 (이미지 부재 시 그라데이션) -->
-				<div class="gradient-bg shop-gradient"></div>
+				<div class="gradient-bg gallery-gradient"></div>
 			</div>
 			<div class="card-content">
 				<h2>잡화점 갤러리</h2>
 			</div>
 		</a>
 
-		<a href="/shop" class="feature-card shop-card">
+		<a href="/shop" class="feature-card">
 			<div class="card-bg">
-				<!-- 쇼핑 섹션용 배경 (이미지 부재 시 그라데이션) -->
 				<div class="gradient-bg shop-gradient"></div>
 			</div>
 			<div class="card-content">
@@ -201,12 +199,16 @@
 		height: 100%;
 	}
 
-	.games-gradient {
-		background: linear-gradient(135deg, #ff416c, #ff4b2b);
+	.gallery-gradient {
+		background: linear-gradient(135deg, #4facfe, #00f2fe);
 	}
 
 	.shop-gradient {
-		background: linear-gradient(135deg, #4facfe, #00f2fe);
+		background: linear-gradient(135deg, #667eea, #764ba2);
+	}
+
+	.games-gradient {
+		background: linear-gradient(135deg, #ff416c, #ff4b2b);
 	}
 
 	@media (max-width: 768px) {
